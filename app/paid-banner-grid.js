@@ -4,18 +4,18 @@ import {api} from '../lib/api';
 import {supabase} from '../lib/supabase';
 
 const fmt=n=>Number(n||0).toLocaleString('ko-KR')+' P';
-const endText=s=>s?.is_lifetime?'서비스 종료 시까지':s?.expires_at?String(s.expires_at).replace('T',' ').slice(0,16):'-';
+const endText=s=>s?.is_lifetime?'없음 (영구)':s?.expires_at?String(s.expires_at).replace('T',' ').slice(0,16):'-';
 
 export default function PaidBannerGrid(){
  const [data,setData]=useState({items:[],plans:[],image_guide:'권장 1200×360px (10:3), JPG/PNG/WebP, 최대 5MB'});
  const [selected,setSelected]=useState(null),[mode,setMode]=useState('purchase'),[plan,setPlan]=useState('1M');
  const [file,setFile]=useState(null),[preview,setPreview]=useState(''),[targetUrl,setTargetUrl]=useState(''),[title,setTitle]=useState(''),[busy,setBusy]=useState(false);
- async function load(){try{const r=await api.bannerSlots();setData(r)}catch{}}
+ async function load(){try{const r=await api.bannerSlots();setData(r);return r}catch{return null}}
  useEffect(()=>{load()},[]);
  const slots=Array.from({length:6},(_,i)=>data.items?.find(x=>Number(x.slot)===i+1)||{slot:i+1,available:true});
  function openPurchase(s){if(!s.available&&!s.owned_by_me)return;setSelected(s);setMode(s.owned_by_me?'edit':'purchase');setTargetUrl(s.target_url||'');setTitle(s.title||`광고 ${s.slot}`);setFile(null);setPreview(s.image_url||'')}
  function friendly(e){const m=e?.message||String(e);if(m.includes('INSUFFICIENT_POINT'))return '포인트가 부족합니다.';if(m.includes('SLOT_UNAVAILABLE'))return '이미 다른 사용자가 이용 중인 광고칸입니다.';if(m.includes('BANNER_LIMIT_2'))return '계정 1개당 동시에 최대 2개 광고칸만 이용할 수 있습니다.';return m}
- async function purchase(){if(!selected)return;const p=data.plans?.find(x=>x.code===plan);if(!p)return;if(!confirm(`${selected.slot}번 광고칸을 ${p.label} / ${fmt(p.price)}에 구매할까요?`))return;setBusy(true);try{await api.purchaseBannerSlot(selected.slot,plan);await load();setMode('edit');alert('광고칸 구매가 완료되었습니다. 이제 이미지를 등록하세요.')}catch(e){alert(friendly(e))}finally{setBusy(false)}}
+ async function purchase(){if(!selected)return;const p=data.plans?.find(x=>x.code===plan);if(!p)return;if(!confirm(`${selected.slot}번 광고칸을 ${p.label} / ${fmt(p.price)}에 구매할까요?`))return;setBusy(true);try{await api.purchaseBannerSlot(selected.slot,plan);const fresh=await load();const mine=fresh?.items?.find(x=>Number(x.slot)===Number(selected.slot));if(mine){setSelected(mine);setTitle(mine.title||`광고 ${mine.slot}`);setTargetUrl(mine.target_url||'');setPreview(mine.image_url||'')}setMode('edit');alert('광고칸 구매가 완료되었습니다. 이제 이미지를 등록하세요.')}catch(e){alert(friendly(e))}finally{setBusy(false)}}
  async function saveCreative(){if(!selected)return;if(!file&&!preview)return alert('광고 이미지를 등록하세요.');if(file&&file.size>5*1024*1024)return alert('이미지는 최대 5MB까지 등록할 수 있습니다.');if(file&&!file.type?.startsWith('image/'))return alert('이미지 파일만 등록할 수 있습니다.');setBusy(true);try{let imageUrl=preview;if(file){const {data:{session}}=await supabase.auth.getSession();if(!session)throw new Error('로그인이 필요합니다.');const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();const path=`${session.user.id}/paid-banners/slot-${selected.slot}-${Date.now()}.${ext}`;const {error}=await supabase.storage.from('market-media').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});if(error)throw error;const {data:pub}=supabase.storage.from('market-media').getPublicUrl(path);imageUrl=pub.publicUrl}await api.updateBannerCreative(selected.slot,{title:title.trim()||`광고 ${selected.slot}`,image_url:imageUrl,target_url:targetUrl.trim()||null});await load();setSelected(null);alert('광고 이미지를 저장했습니다.')}catch(e){alert(friendly(e))}finally{setBusy(false)}}
  return <>
   <section className="paidBannerGrid">
