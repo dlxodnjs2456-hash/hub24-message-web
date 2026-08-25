@@ -7,130 +7,36 @@ const money=n=>Number(n||0).toLocaleString('ko-KR')+' P';
 const level=s=>`Lv.${Number(s?.level||1)}`;
 
 export default function MarketPage(){
- const [ready,setReady]=useState(false);
- const [session,setSession]=useState(null);
- const [categories,setCategories]=useState([]);
- const [products,setProducts]=useState([]);
- const [sellers,setSellers]=useState([]);
- const [trades,setTrades]=useState([]);
- const [activeCategory,setActiveCategory]=useState('');
- const [view,setView]=useState('products');
- const [query,setQuery]=useState('');
- const [sort,setSort]=useState('latest');
- const [directOpen,setDirectOpen]=useState(false);
- const [direct,setDirect]=useState({seller_id:'',seller_name:'',amount:'',title:'직접 협의 거래',description:'',category_id:''});
- const [selectedTrade,setSelectedTrade]=useState(null);
- const [messages,setMessages]=useState([]);
- const [chatText,setChatText]=useState('');
-
- useEffect(()=>{
-   supabase.auth.getSession().then(({data})=>{setSession(data.session||null);setReady(true)});
-   if(typeof window!=='undefined'){
-     const q=new URLSearchParams(window.location.search).get('view');
-     if(q==='trades'||q==='sellers')setView(q);
-   }
- },[]);
-
- async function load(category=''){
-   try{
-     const [c,p,s,t]=await Promise.all([
-       api.marketCategories(),api.marketProducts(category),api.marketSellers(),api.marketTrades()
-     ]);
-     setCategories(c.items||[]);setProducts(p.items||[]);setSellers(s.items||[]);setTrades(t.items||[]);
-   }catch(e){alert(e.message)}
- }
+ const [ready,setReady]=useState(false),[session,setSession]=useState(null),[categories,setCategories]=useState([]),[products,setProducts]=useState([]),[activeCategory,setActiveCategory]=useState(''),[seller,setSeller]=useState(null),[sellers,setSellers]=useState([]),[trades,setTrades]=useState([]),[wallet,setWallet]=useState(null);
+ const [sellerName,setSellerName]=useState(''),[sellerIntro,setSellerIntro]=useState(''),[product,setProduct]=useState({category_id:'',title:'',description:'',price:'',stock:''}),[direct,setDirect]=useState({seller_id:'',amount:'',title:'직접 협의 거래',description:'',category_id:''});
+ const [selectedTrade,setSelectedTrade]=useState(null),[messages,setMessages]=useState([]),[chatText,setChatText]=useState('');
+ useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session||null);setReady(true)})},[]);
+ async function load(category=''){try{const [c,p,s,t,w,me]=await Promise.all([api.marketCategories(),api.marketProducts(category),api.marketSellers(),api.marketTrades(),api.wallet(),api.sellerMe()]);setCategories(c.items||[]);setProducts(p.items||[]);setSellers(s.items||[]);setTrades(t.items||[]);setWallet(w.wallet||null);setSeller(me.item||null)}catch(e){alert(e.message)}}
  useEffect(()=>{if(session)load('')},[session]);
-
- async function chooseCategory(id){
-   setActiveCategory(String(id||''));
-   try{const p=await api.marketProducts(id||'');setProducts(p.items||[])}catch(e){alert(e.message)}
- }
-
+ async function chooseCategory(id){setActiveCategory(String(id||''));try{const p=await api.marketProducts(id||'');setProducts(p.items||[])}catch(e){alert(e.message)}}
  if(!ready)return <div className="authPage"><div className="authCard">자유시장을 불러오는 중...</div></div>;
  if(!session)return <div className="authPage"><div className="authCard"><h1>HUB24 <span>MARKET</span></h1><p>먼저 로그인하세요.</p><a className="btn primary" href="/">로그인 화면</a></div></div>;
-
- const myId=session.user.id;
- let shownProducts=products.filter(p=>{
-   const q=query.trim().toLowerCase();
-   if(!q)return true;
-   return String(p.title||'').toLowerCase().includes(q)||String(p.description||'').toLowerCase().includes(q)||String(p.seller?.seller_name||'').toLowerCase().includes(q);
- });
- if(sort==='low')shownProducts=[...shownProducts].sort((a,b)=>Number(a.price)-Number(b.price));
- if(sort==='high')shownProducts=[...shownProducts].sort((a,b)=>Number(b.price)-Number(a.price));
- if(sort==='sales')shownProducts=[...shownProducts].sort((a,b)=>Number(b.seller?.completed_sales||0)-Number(a.seller?.completed_sales||0));
- if(sort==='latest')shownProducts=[...shownProducts].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
-
- async function buy(p){
-   const qty=Number(prompt('구매 수량을 입력하세요.','1')||0);if(qty<=0)return;
-   if(!confirm(`${p.title}\n${money(Number(p.price)*qty)}를 에스크로로 결제할까요?`))return;
-   try{const r=await api.buyProduct(p.id,qty);await load(activeCategory);alert(`에스크로 거래 #${r.trade_id}가 생성되었습니다.`);setView('trades')}catch(e){alert(e.message)}
- }
- function openDirect(s){setDirect({seller_id:String(s.user_id),seller_name:s.seller_name,amount:'',title:`${s.seller_name} 직접 협의 거래`,description:'',category_id:''});setDirectOpen(true)}
- async function createDirect(){
-   if(!direct.seller_id||Number(direct.amount)<=0)return alert('에스크로 금액을 확인하세요.');
-   if(!confirm(`${money(direct.amount)}를 에스크로에 보관하고 거래요청을 보낼까요?`))return;
-   try{const r=await api.directEscrow({seller_id:direct.seller_id,amount:Number(direct.amount),title:direct.title||'직접 협의 거래',description:direct.description||null,category_id:direct.category_id?Number(direct.category_id):null});setDirectOpen(false);await load(activeCategory);alert(`직접 에스크로 거래 #${r.trade_id}가 생성되었습니다.`);setView('trades')}catch(e){alert(e.message)}
- }
+ const myId=session.user.id,approved=seller?.status==='APPROVED';
+ async function applySeller(){if(!sellerName.trim())return alert('판매자명을 입력하세요.');try{await api.sellerApply({seller_name:sellerName.trim(),introduction:sellerIntro||null});await load(activeCategory);alert('판매자 등록 신청이 접수되었습니다.')}catch(e){alert(e.message)}}
+ async function addProduct(){if(!product.title.trim()||Number(product.price)<0)return alert('상품명과 가격을 확인하세요.');try{await api.createProduct({category_id:product.category_id?Number(product.category_id):null,title:product.title,description:product.description||null,price:Number(product.price),stock:product.stock===''?null:Number(product.stock)});setProduct({category_id:'',title:'',description:'',price:'',stock:''});await load(activeCategory);alert('판매상품을 등록했습니다.')}catch(e){alert(e.message)}}
+ async function buy(p){const qty=Number(prompt('구매 수량을 입력하세요.','1')||0);if(qty<=0)return;if(!confirm(`${p.title}\n${money(Number(p.price)*qty)}를 에스크로로 결제할까요?`))return;try{const r=await api.buyProduct(p.id,qty);await load(activeCategory);alert(`에스크로 거래 #${r.trade_id}가 생성되었습니다.`)}catch(e){alert(e.message)}}
+ async function createDirect(){if(!direct.seller_id||Number(direct.amount)<=0)return alert('판매자와 에스크로 금액을 확인하세요.');if(!confirm(`${money(direct.amount)}를 에스크로에 보관하고 거래요청을 보낼까요?`))return;try{const r=await api.directEscrow({seller_id:direct.seller_id,amount:Number(direct.amount),title:direct.title||'직접 협의 거래',description:direct.description||null,category_id:direct.category_id?Number(direct.category_id):null});setDirect({seller_id:'',amount:'',title:'직접 협의 거래',description:'',category_id:''});await load(activeCategory);alert(`직접 에스크로 거래 #${r.trade_id}가 생성되었습니다.`)}catch(e){alert(e.message)}}
  async function openTrade(t){setSelectedTrade(t);try{const r=await api.tradeMessages(t.id);setMessages(r.items||[])}catch(e){alert(e.message)}}
  async function sendChat(){if(!selectedTrade||!chatText.trim())return;try{await api.sendTradeMessage(selectedTrade.id,chatText.trim());setChatText('');await openTrade(selectedTrade)}catch(e){alert(e.message)}}
- async function tradeAction(fn,id,msg){if(msg&&!confirm(msg))return;try{await api[fn](id);await load(activeCategory);const fresh=(await api.marketTrades()).items.find(x=>x.id===id);if(fresh)await openTrade(fresh)}catch(e){alert(e.message)}}
+ async function act(fn,id,msg){if(msg&&!confirm(msg))return;try{await api[fn](id);await load(activeCategory);const fresh=(await api.marketTrades()).items.find(x=>x.id===id);if(fresh)await openTrade(fresh)}catch(e){alert(e.message)}}
+ function pickSeller(s){setDirect(v=>({...v,seller_id:String(s.user_id),title:`${s.seller_name} 직접 협의 거래`}));document.getElementById('directEscrow')?.scrollIntoView({behavior:'smooth'})}
+ return <main className="content" style={{maxWidth:1500,margin:'0 auto'}}>
+  <div className="head"><div><h1>자유시장</h1><p>판매상품 · 직접 협의 거래 · HUB24 에스크로</p></div><div className="actions compact"><span className="badge ok">사용 가능 {money(wallet?.available_balance)}</span><button className="btn" onClick={()=>load(activeCategory)}>새로고침</button></div></div>
 
- return <main className="marketPage">
-   <section className="marketHero">
-    <div><span className="eyebrow">HUB24 MARKET</span><h1>자유시장</h1><p>판매상품을 비교하고 검증된 판매자와 에스크로로 거래하세요.</p></div>
-    <div className="marketHeroActions"><a className="softButton" href="/seller">판매자센터</a><button className="softButton" onClick={()=>setView('trades')}>내 거래</button></div>
-   </section>
+  <section className="card"><div className="head"><div><h2>판매상품</h2><p>자유시장 첫 화면은 항상 전체보기입니다. 카테고리는 운영자가 관리합니다.</p></div></div><div className="filters" style={{marginBottom:14}}><button className={!activeCategory?'active':''} onClick={()=>chooseCategory('')}>전체보기</button>{categories.map(c=><button className={String(activeCategory)===String(c.id)?'active':''} key={c.id} onClick={()=>chooseCategory(c.id)}>{c.name}</button>)}</div><div className="marketProducts">{products.length?products.map(p=><div className="marketProduct" key={p.id}><div><small>{p.category?.name||'기타'}</small><h3>{p.title}</h3><p>{p.description||'상품 설명이 없습니다.'}</p></div><div className="sellerMeta"><b>{p.seller?.seller_name||'판매자'}</b><span>{level(p.seller)} · 완료 {Number(p.seller?.completed_sales||0).toLocaleString()}건 · 분쟁 {Number(p.seller?.dispute_count||0)}건</span></div><div className="productBottom"><div><strong>{money(p.price)}</strong><small>재고 {p.stock==null?'제한 없음':p.stock}</small></div><button className="btn primary" onClick={()=>buy(p)}>에스크로 구매</button></div></div>):<div className="empty">해당 카테고리에 판매상품이 없습니다.</div>}</div></section>
 
-   <div className="marketViewTabs">
-    <button className={view==='products'?'active':''} onClick={()=>setView('products')}>전체 상품</button>
-    <button className={view==='sellers'?'active':''} onClick={()=>setView('sellers')}>직접 거래 판매자</button>
-    <button className={view==='trades'?'active':''} onClick={()=>setView('trades')}>내 거래</button>
-   </div>
+  <section className="card" style={{marginTop:14}}><div className="head"><div><h2>직접 거래 가능 판매자</h2><p>상품을 등록하지 않은 판매자도 승인 판매자라면 여기에 노출됩니다.</p></div></div><div className="marketProducts">{sellers.filter(s=>String(s.user_id)!==String(myId)).length?sellers.filter(s=>String(s.user_id)!==String(myId)).map(s=><div className="marketProduct" key={s.user_id}><div><small>정식 판매자</small><h3>{s.seller_name}</h3><p>{s.introduction||'판매자 소개가 없습니다.'}</p></div><div className="sellerMeta"><b>{level(s)}</b><span>완료 {Number(s.completed_sales||0).toLocaleString()}건 · 누적 {money(s.total_sales_amount)} · 분쟁 {s.dispute_count||0}건</span></div><div className="productBottom"><small>실시간 협의형 거래 가능</small><button className="btn primary" onClick={()=>pickSeller(s)}>직접 에스크로</button></div></div>):<div className="empty">등록된 판매자가 없습니다.</div>}</div></section>
 
-   {view==='products'&&<>
-    <section className="shopToolbar">
-     <div className="marketSearch"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="상품명 또는 판매자 검색"/></div>
-     <select value={sort} onChange={e=>setSort(e.target.value)}>
-      <option value="latest">최신순</option><option value="low">가격 낮은순</option><option value="high">가격 높은순</option><option value="sales">판매 많은순</option>
-     </select>
-    </section>
-    <div className="categoryRail"><button className={!activeCategory?'active':''} onClick={()=>chooseCategory('')}>전체보기</button>{categories.map(c=><button className={String(activeCategory)===String(c.id)?'active':''} key={c.id} onClick={()=>chooseCategory(c.id)}>{c.name}</button>)}</div>
-    <section className="productGrid">
-     {shownProducts.length?shownProducts.map(p=><article className="shopCard" key={p.id}>
-      <div className="shopCardTop"><span>{p.category?.name||'기타'}</span><small>{p.stock==null?'재고 제한 없음':`재고 ${p.stock}`}</small></div>
-      <div className="productVisual"><span>{String(p.title||'H').slice(0,1).toUpperCase()}</span></div>
-      <div className="shopCardBody"><h3>{p.title}</h3><p>{p.description||'상품 설명이 없습니다.'}</p>
-       <div className="sellerStrip"><div className="sellerAvatar">{String(p.seller?.seller_name||'S').slice(0,1)}</div><div><b>{p.seller?.seller_name||'판매자'}</b><span>{level(p.seller)} · 완료 {Number(p.seller?.completed_sales||0).toLocaleString()}건</span></div></div>
-       <div className="shopPrice"><strong>{money(p.price)}</strong><button onClick={()=>buy(p)}>구매하기</button></div>
-      </div>
-     </article>):<div className="marketEmpty">조건에 맞는 상품이 없습니다.</div>}
-    </section>
-   </>}
+  <div className="two" style={{marginTop:14}}>
+   <section className="card" id="directEscrow"><h2>직접 에스크로 요청</h2><p style={{color:'#8292a8',fontSize:11}}>상품 등록 없이 협의한 거래도 상대 판매자와 금액을 직접 지정해 에스크로를 시작할 수 있습니다.</p><div className="form"><label className="field full"><span>상대 판매자</span><select className="input" value={direct.seller_id} onChange={e=>setDirect({...direct,seller_id:e.target.value})}><option value="">판매자 선택</option>{sellers.filter(s=>String(s.user_id)!==String(myId)).map(s=><option value={s.user_id} key={s.user_id}>{s.seller_name} · {level(s)} · 완료 {s.completed_sales||0}건</option>)}</select></label><label className="field"><span>에스크로 금액</span><input className="input" type="number" value={direct.amount} onChange={e=>setDirect({...direct,amount:e.target.value})} placeholder="10000"/></label><label className="field"><span>카테고리</span><select className="input" value={direct.category_id} onChange={e=>setDirect({...direct,category_id:e.target.value})}><option value="">선택 안 함</option>{categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label><label className="field full"><span>거래 제목</span><input className="input" value={direct.title} onChange={e=>setDirect({...direct,title:e.target.value})}/></label><label className="field full"><span>협의 내용</span><textarea className="textarea" value={direct.description} onChange={e=>setDirect({...direct,description:e.target.value})}/></label></div><div className="actions"><button className="btn primary" onClick={createDirect}>이 금액으로 에스크로 요청</button></div><div className="note">요청 즉시 구매자의 사용 가능 포인트가 차감되고 에스크로에 보관됩니다. 판매자 완료 요청 후 구매자가 확인해야 판매자에게 지급됩니다.</div></section>
+   <section className="card"><h2>판매자센터</h2>{!seller?<><p style={{color:'#8292a8',fontSize:11}}>판매자 등록 후 관리자 승인을 받으면 상품 등록 및 직접 거래 판매자로 노출됩니다.</p><label className="field"><span>판매자명</span><input className="input" value={sellerName} onChange={e=>setSellerName(e.target.value)}/></label><label className="field" style={{marginTop:10}}><span>판매자 소개</span><textarea className="textarea" value={sellerIntro} onChange={e=>setSellerIntro(e.target.value)}/></label><div className="actions"><button className="btn primary" onClick={applySeller}>판매자 등록 신청</button></div></>:!approved?<div><b>판매자 상태: {seller.status}</b><div className="note">관리자 승인 후 판매 기능이 활성화됩니다.</div></div>:<><div className="jobstats"><b>{seller.seller_name}</b><span className="badge ok">{level(seller)}</span><span>완료 {seller.completed_sales||0}건</span><span>누적 {money(seller.total_sales_amount)}</span></div><div className="form"><label className="field"><span>카테고리</span><select className="input" value={product.category_id} onChange={e=>setProduct({...product,category_id:e.target.value})}><option value="">기타</option>{categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label><label className="field"><span>가격</span><input className="input" type="number" value={product.price} onChange={e=>setProduct({...product,price:e.target.value})}/></label><label className="field full"><span>상품명</span><input className="input" value={product.title} onChange={e=>setProduct({...product,title:e.target.value})}/></label><label className="field"><span>재고 (빈 값=제한 없음)</span><input className="input" type="number" value={product.stock} onChange={e=>setProduct({...product,stock:e.target.value})}/></label><label className="field full"><span>상품 설명</span><textarea className="textarea" value={product.description} onChange={e=>setProduct({...product,description:e.target.value})}/></label></div><div className="actions"><button className="btn primary" onClick={addProduct}>판매상품 등록</button></div></>}</section>
+  </div>
 
-   {view==='sellers'&&<section className="sellerBrowse">
-    <div className="sectionTitle"><h2>직접 거래 가능 판매자</h2><p>실시간 응대가 필요한 거래는 판매자에게 원하는 금액으로 에스크로 요청을 보낼 수 있습니다.</p></div>
-    <div className="sellerGrid">{sellers.filter(s=>String(s.user_id)!==String(myId)).length?sellers.filter(s=>String(s.user_id)!==String(myId)).map(s=><article className="sellerCard" key={s.user_id}>
-      <div className="sellerCardHead"><div className="sellerBigAvatar">{String(s.seller_name||'S').slice(0,1)}</div><div><h3>{s.seller_name}</h3><span>{level(s)} · 정식 판매자</span></div></div>
-      <p>{s.introduction||'판매자 소개가 없습니다.'}</p>
-      <div className="sellerMinPrice"><span>판매 가능 최저가</span><strong>{Number(s.minimum_price||0)>0?money(s.minimum_price):'미등록'}</strong></div>
-      <div className="sellerStats"><div><b>{Number(s.completed_sales||0).toLocaleString()}</b><span>완료 거래</span></div><div><b>{s.dispute_count||0}</b><span>분쟁</span></div><div><b>{money(s.total_sales_amount)}</b><span>누적 거래</span></div></div>
-      <button className="sellerAction" onClick={()=>openDirect(s)}>직접 에스크로 요청</button>
-     </article>):<div className="marketEmpty">등록된 판매자가 없습니다.</div>}</div>
-   </section>}
-
-   {view==='trades'&&<section className="tradeWorkspace">
-    <div className="sectionTitle"><h2>내 거래</h2><p>상품 구매와 직접 협의 거래의 진행상태를 확인합니다.</p></div>
-    <div className="tradeGrid"><div className="tradeList">{trades.length?trades.map(t=><button key={t.id} className={selectedTrade?.id===t.id?'active':''} onClick={()=>openTrade(t)}><b>#{t.id} · {t.title_snapshot}</b><span>{t.trade_type==='DIRECT'?'직접협의':'상품'} · {money(t.amount)} · {t.status}</span></button>):<div className="empty">거래가 없습니다.</div>}</div>
-     <div className="tradeDetail">{selectedTrade?<><div className="head"><div><h2>거래 #{selectedTrade.id}</h2><p>{selectedTrade.title_snapshot} · {money(selectedTrade.amount)}</p></div><span className="badge wait">{selectedTrade.status}</span></div>
-      <div className="tradeActions">{String(selectedTrade.seller_id)===String(myId)&&['ESCROWED','ACCEPTED'].includes(selectedTrade.status)&&<button className="btn primary" onClick={()=>tradeAction('sellerComplete',selectedTrade.id,'판매완료를 요청할까요?')}>판매완료 요청</button>}{String(selectedTrade.buyer_id)===String(myId)&&['ESCROWED','ACCEPTED','SELLER_COMPLETED'].includes(selectedTrade.status)&&<button className="btn primary" onClick={()=>tradeAction('buyerComplete',selectedTrade.id,`${money(selectedTrade.amount)}를 판매자에게 지급할까요?`)}>거래완료 · 지급</button>}{!['COMPLETED','CANCELLED','ADMIN_RESOLVED'].includes(selectedTrade.status)&&<><button className="btn" onClick={()=>tradeAction('cancelTrade',selectedTrade.id,'거래 취소를 요청할까요?')}>취소 요청</button><button className="btn danger" onClick={()=>tradeAction('disputeTrade',selectedTrade.id,'분쟁을 접수할까요?')}>문제 신고</button></>}</div>
-      <div className="tradeChat">{messages.length?messages.map(m=><div className={'tradeMsg '+(m.sender_type==='SYSTEM'?'system':'')} key={m.id}><small>{m.sender_type} · {m.created_at?.replace('T',' ').slice(0,19)}</small><p>{m.message}</p></div>):<div className="empty">대화가 없습니다.</div>}</div>
-      <div className="tradeComposer"><input value={chatText} onChange={e=>setChatText(e.target.value)} placeholder="거래 메시지 입력" onKeyDown={e=>e.key==='Enter'&&sendChat()}/><button onClick={sendChat}>전송</button></div></>:<div className="marketEmpty">왼쪽에서 거래를 선택하세요.</div>}</div>
-    </div>
-   </section>}
-
-   {directOpen&&<div className="modalBack"><div className="modal directModal"><div className="head"><div><h2>직접 에스크로 요청</h2><p>{direct.seller_name} 판매자와 협의할 금액을 지정합니다.</p></div><button className="x" onClick={()=>setDirectOpen(false)}>×</button></div>
-    <div className="form"><label className="field"><span>에스크로 금액</span><input className="input" type="number" value={direct.amount} onChange={e=>setDirect({...direct,amount:e.target.value})}/></label><label className="field"><span>카테고리</span><select className="input" value={direct.category_id} onChange={e=>setDirect({...direct,category_id:e.target.value})}><option value="">선택 안 함</option>{categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label><label className="field full"><span>거래 제목</span><input className="input" value={direct.title} onChange={e=>setDirect({...direct,title:e.target.value})}/></label><label className="field full"><span>협의 내용</span><textarea className="textarea" value={direct.description} onChange={e=>setDirect({...direct,description:e.target.value})}/></label></div>
-    <div className="escrowNotice">요청 금액은 즉시 에스크로에 보관되며 거래 완료 전까지 판매자에게 지급되지 않습니다.</div><div className="actions"><button className="btn" onClick={()=>setDirectOpen(false)}>취소</button><button className="btn primary" onClick={createDirect}>에스크로 요청</button></div>
-   </div></div>}
- </main>;
+  <section className="card" style={{marginTop:14}}><h2>내 거래</h2><div className="tradeGrid"><div className="tradeList">{trades.length?trades.map(t=><button key={t.id} className={selectedTrade?.id===t.id?'active':''} onClick={()=>openTrade(t)}><b>#{t.id} · {t.title_snapshot}</b><span>{t.trade_type==='DIRECT'?'직접협의':'상품'} · {money(t.amount)} · {t.status}</span></button>):<div className="empty">거래가 없습니다.</div>}</div><div className="tradeDetail">{selectedTrade?<><div className="head"><div><h2>거래 #{selectedTrade.id}</h2><p>{selectedTrade.title_snapshot} · {money(selectedTrade.amount)}</p></div><span className="badge wait">{selectedTrade.status}</span></div><div className="tradeActions">{String(selectedTrade.seller_id)===String(myId)&&['ESCROWED','ACCEPTED'].includes(selectedTrade.status)&&<button className="btn primary" onClick={()=>act('sellerComplete',selectedTrade.id,'판매완료를 요청할까요?')}>판매완료 요청</button>}{String(selectedTrade.buyer_id)===String(myId)&&['ESCROWED','ACCEPTED','SELLER_COMPLETED'].includes(selectedTrade.status)&&<button className="btn primary" onClick={()=>act('buyerComplete',selectedTrade.id,`${money(selectedTrade.amount)}를 판매자에게 지급할까요?`)}>거래완료 · 지급</button>}{!['COMPLETED','CANCELLED','ADMIN_RESOLVED'].includes(selectedTrade.status)&&<><button className="btn" onClick={()=>act('cancelTrade',selectedTrade.id,'거래 취소를 요청할까요?')}>취소 요청</button><button className="btn danger" onClick={()=>act('disputeTrade',selectedTrade.id,'분쟁을 접수할까요? 에스크로가 동결됩니다.')}>문제 신고</button></>}</div><div className="tradeChat">{messages.length?messages.map(m=><div className={'tradeMsg '+(m.sender_type==='SYSTEM'?'system':'')} key={m.id}><small>{m.sender_type} · {m.created_at?.replace('T',' ').slice(0,19)}</small><p>{m.message}</p></div>):<div className="empty">대화가 없습니다.</div>}</div><div className="actions"><input className="input" value={chatText} onChange={e=>setChatText(e.target.value)} placeholder="거래 메시지 입력" onKeyDown={e=>e.key==='Enter'&&sendChat()}/><button className="btn primary" onClick={sendChat}>전송</button></div></>:<div className="empty">왼쪽에서 거래를 선택하세요.</div>}</div></div></section>
+ </main>
 }
