@@ -1,0 +1,3 @@
+export default function AdminLayout({children}){
+ return <><div style={{position:'sticky',top:0,zIndex:90,display:'flex',alignItems:'center',gap:8,padding:'10px 20px',background:'#09182a',borderBottom:'1px solid #294b6d'}}><b style={{color:'#e9f4ff',marginRight:10,fontSize:13}}>ANGEL PAY ADMIN</b><a href="/admin" style={{color:'#b8d2ea',textDecoration:'none',fontSize:10,padding:'7px 10px',border:'1px solid #315575',borderRadius:8}}>관리자 메인</a><a href="/admin/banner-settings" style={{color:'#b8d2ea',textDecoration:'none',fontSize:10,padding:'7px 10px',border:'1px solid #315575',borderRadius:8}}>광고 슬롯 설정</a></div>{children}</>;
+}
