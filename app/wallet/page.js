@@ -1,17 +1,20 @@
 'use client';
 import {useEffect,useState} from 'react';
-import {useSearchParams} from 'next/navigation';
 import {supabase} from '../../lib/supabase';
 import {api} from '../../lib/api';
 
 const fmt=n=>Number(n||0).toLocaleString('ko-KR')+' P';
 
 export default function WalletPage(){
- const params=useSearchParams();
  const [ready,setReady]=useState(false),[session,setSession]=useState(null),[data,setData]=useState(null),[charges,setCharges]=useState([]),[withdrawals,setWithdrawals]=useState([]),[tab,setTab]=useState('overview');
  const [amount,setAmount]=useState(''),[note,setNote]=useState(''),[withdrawAmount,setWithdrawAmount]=useState('');
- useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session||null);setReady(true)})},[]);
- useEffect(()=>{const t=params.get('tab');setTab(['charge','withdraw','history'].includes(t)?t:'overview')},[params]);
+ useEffect(()=>{
+   supabase.auth.getSession().then(({data})=>{setSession(data.session||null);setReady(true)});
+   if(typeof window!=='undefined'){
+     const t=new URLSearchParams(window.location.search).get('tab');
+     setTab(['charge','withdraw','history'].includes(t)?t:'overview');
+   }
+ },[]);
  async function load(){try{const [w,c,x]=await Promise.all([api.wallet(),api.chargeRequests(),api.withdrawals()]);setData(w);setCharges(c.items||[]);setWithdrawals(x.items||[])}catch(e){alert(e.message)}}
  useEffect(()=>{if(session)load()},[session]);
  if(!ready)return <div className="authPage"><div className="authCard">자금 정보를 불러오는 중...</div></div>;
