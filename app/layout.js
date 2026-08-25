@@ -3,6 +3,7 @@ import './marketplace.css';
 import './ui-hotfix.css';
 import './market-vip.css';
 import './angel-theme.css';
+import './brand-overrides.css';
 import TopNav from './topnav';
 
 export const metadata={title:'ANGEL PAY · N PAY',description:'ANGEL PAY marketplace, escrow and messaging platform'};
