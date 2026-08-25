@@ -16,14 +16,14 @@ export default function TopNav(){
  if(p?.startsWith('/admin'))return null;
  const s={
   head:{height:68,background:'linear-gradient(90deg,#0b1730,#102a56)',borderBottom:'1px solid #315b91',position:'sticky',top:0,zIndex:100,color:'#fff',boxShadow:'0 8px 26px rgba(2,12,32,.28)'},
-  inner:{maxWidth:1680,height:'100%',margin:'0 auto',padding:'0 24px',display:'flex',alignItems:'center',gap:8},
-  logo:{display:'flex',alignItems:'center',gap:10,fontWeight:950,fontSize:19,color:'#fff',textDecoration:'none',marginRight:24,letterSpacing:.2},
+  inner:{maxWidth:1720,height:'100%',margin:'0 auto',padding:'0 18px',display:'flex',alignItems:'center',gap:4},
+  logo:{display:'flex',alignItems:'center',gap:9,fontWeight:950,fontSize:18,color:'#fff',textDecoration:'none',marginRight:14,letterSpacing:.2,flex:'0 0 auto'},
   logoMark:{width:34,height:34,borderRadius:11,display:'grid',placeItems:'center',background:'linear-gradient(135deg,#4d9cff,#7cd7ff)',color:'#06224d',fontWeight:1000,boxShadow:'0 8px 20px rgba(72,155,255,.3)'},
   logoSub:{display:'block',fontSize:8,color:'#9fc8ff',letterSpacing:1.4,fontWeight:800,marginTop:2},
-  nav:{display:'flex',height:'100%',alignItems:'center',gap:4},
-  navItem:(active)=>({height:'100%',display:'flex',alignItems:'center',padding:'0 15px',color:active?'#fff':'#b8c9df',textDecoration:'none',fontSize:13,fontWeight:800,borderBottom:active?'3px solid #69b7ff':'3px solid transparent'}),
-  account:{marginLeft:'auto',display:'flex',alignItems:'center',gap:8},
-  point:{height:40,border:'1px solid #4d77aa',background:'#ffffff10',color:'#fff',borderRadius:11,padding:'0 12px',display:'flex',alignItems:'center',gap:8,cursor:'pointer',backdropFilter:'blur(8px)'},
+  nav:{display:'flex',height:'100%',alignItems:'center',gap:1,minWidth:0},
+  navItem:(active)=>({height:'100%',display:'flex',alignItems:'center',padding:'0 11px',color:active?'#fff':'#b8c9df',textDecoration:'none',fontSize:12,fontWeight:850,borderBottom:active?'3px solid #69b7ff':'3px solid transparent',whiteSpace:'nowrap'}),
+  account:{marginLeft:'auto',display:'flex',alignItems:'center',gap:7,flex:'0 0 auto'},
+  point:{height:40,border:'1px solid #4d77aa',background:'#ffffff10',color:'#fff',borderRadius:11,padding:'0 10px',display:'flex',alignItems:'center',gap:7,cursor:'pointer',backdropFilter:'blur(8px)'},
   profile:{height:40,border:'1px solid #4d77aa',background:'#ffffff10',color:'#fff',borderRadius:11,padding:'4px 8px',display:'flex',alignItems:'center',gap:7,cursor:'pointer'},
   avatar:{width:30,height:30,borderRadius:9,background:'linear-gradient(135deg,#4f9bff,#6fd9ff)',color:'#06234c',display:'grid',placeItems:'center',fontSize:12,fontWeight:950},
   wrap:{position:'relative'},
@@ -37,9 +37,11 @@ export default function TopNav(){
    <a href="/market" style={s.logo}><span style={s.logoMark}>N</span><span>ANGEL PAY<span style={s.logoSub}>N PAY · 엔페이</span></span></a>
    <nav style={s.nav}>
     {nav('/market','자유시장',p?.startsWith('/market')||p?.startsWith('/seller'))}
-    {nav('/','텔발',p==='/')}
-    {nav('/community','커뮤니티',p?.startsWith('/community'))}
+    {nav('/free','자유게시판',p?.startsWith('/free'))}
+    {nav('/jobs','구인구직',p?.startsWith('/jobs'))}
+    {nav('/blacklist','블랙리스트',p?.startsWith('/blacklist'))}
     {nav('/wallet','자금',p?.startsWith('/wallet'))}
+    {nav('/','텔발',p==='/')}
     {nav('/?guide=1','사용방법',false)}
    </nav>
    <div style={s.account}>
