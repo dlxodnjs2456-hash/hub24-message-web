@@ -36,8 +36,9 @@ export default function TopNav(){
  return <header style={s.head} ref={wrap}><div style={s.inner}>
    <a href="/market" style={s.logo}><span style={s.logoMark}>N</span><span>ANGEL PAY<span style={s.logoSub}>N PAY · 엔페이</span></span></a>
    <nav style={s.nav}>
-    {nav('/market','구매',p?.startsWith('/market')||p?.startsWith('/seller'))}
-    {nav('/','메시지',p==='/')}
+    {nav('/market','자유시장',p?.startsWith('/market')||p?.startsWith('/seller'))}
+    {nav('/','텔발',p==='/')}
+    {nav('/community','커뮤니티',p?.startsWith('/community'))}
     {nav('/wallet','자금',p?.startsWith('/wallet'))}
     {nav('/?guide=1','사용방법',false)}
    </nav>
