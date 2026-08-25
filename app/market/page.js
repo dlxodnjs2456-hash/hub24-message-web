@@ -2,18 +2,19 @@
 import {useEffect,useState} from 'react';
 import {supabase} from '../../lib/supabase';
 import {api} from '../../lib/api';
+import PaidBannerGrid from '../paid-banner-grid';
 
 const money=n=>Number(n||0).toLocaleString('ko-KR')+' P';
 const level=s=>`Lv.${Number(s?.level||1)}`;
 const isVip=s=>!!(s?.vip_until&&new Date(s.vip_until).getTime()>Date.now());
 
 export default function MarketPage(){
- const [ready,setReady]=useState(false),[session,setSession]=useState(null),[categories,setCategories]=useState([]),[products,setProducts]=useState([]),[trades,setTrades]=useState([]),[banners,setBanners]=useState([]);
+ const [ready,setReady]=useState(false),[session,setSession]=useState(null),[categories,setCategories]=useState([]),[products,setProducts]=useState([]),[trades,setTrades]=useState([]);
  const [activeCategory,setActiveCategory]=useState(''),[view,setView]=useState('products'),[query,setQuery]=useState(''),[sort,setSort]=useState('latest');
  const [directOpen,setDirectOpen]=useState(false),[direct,setDirect]=useState({seller_id:'',seller_name:'',amount:'',title:'직접 협의 거래',description:'',category_id:''});
  const [selectedTrade,setSelectedTrade]=useState(null),[messages,setMessages]=useState([]),[chatText,setChatText]=useState('');
  useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session||null);setReady(true)});if(typeof window!=='undefined'){const q=new URLSearchParams(window.location.search).get('view');if(q==='trades'||q==='vip')setView(q)}},[]);
- async function load(category=''){try{const [c,p,t,b]=await Promise.all([api.marketCategories(),api.marketProducts(category),api.marketTrades(),api.marketBanners()]);setCategories(c.items||[]);setProducts(p.items||[]);setTrades(t.items||[]);setBanners(b.items||[])}catch(e){alert(e.message)}}
+ async function load(category=''){try{const [c,p,t]=await Promise.all([api.marketCategories(),api.marketProducts(category),api.marketTrades()]);setCategories(c.items||[]);setProducts(p.items||[]);setTrades(t.items||[])}catch(e){alert(e.message)}}
  useEffect(()=>{if(session)load('')},[session]);
  async function chooseCategory(id){setActiveCategory(String(id||''));try{const p=await api.marketProducts(id||'');setProducts(p.items||[])}catch(e){alert(e.message)}}
  if(!ready)return <div className="authPage"><div className="authCard">자유시장을 불러오는 중...</div></div>;
@@ -22,7 +23,6 @@ export default function MarketPage(){
  function sorted(list){let out=list.filter(p=>{const q=query.trim().toLowerCase();if(!q)return true;return String(p.title||'').toLowerCase().includes(q)||String(p.description||'').toLowerCase().includes(q)||String(p.seller?.seller_name||'').toLowerCase().includes(q)});if(sort==='low')out=[...out].sort((a,b)=>Number(a.price)-Number(b.price));if(sort==='high')out=[...out].sort((a,b)=>Number(b.price)-Number(a.price));if(sort==='sales')out=[...out].sort((a,b)=>Number(b.seller?.completed_sales||0)-Number(a.seller?.completed_sales||0));if(sort==='latest')out=[...out].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));return out}
  const shownProducts=sorted(products);
  const vipProducts=sorted(products.filter(p=>isVip(p.seller)));
- const bannerSlots=Array.from({length:6},(_,i)=>banners.find(b=>Number(b.sort_order)===i+1)||null);
  async function buy(p){const qty=Number(prompt('구매 수량을 입력하세요.','1')||0);if(qty<=0)return;if(!confirm(`${p.title}\n${money(Number(p.price)*qty)}를 에스크로로 결제할까요?`))return;try{const r=await api.buyProduct(p.id,qty);await load(activeCategory);alert(`에스크로 거래 #${r.trade_id}가 생성되었습니다.`);setView('trades')}catch(e){alert(e.message)}}
  function openDirect(p){const s=p.seller||{};setDirect({seller_id:String(p.seller_id),seller_name:s.seller_name||'판매자',amount:'',title:`${p.title} · 직접 협의 거래`,description:`상품: ${p.title}`,category_id:p.category_id?String(p.category_id):''});setDirectOpen(true)}
  async function createDirect(){if(!direct.seller_id||Number(direct.amount)<=0)return alert('에스크로 금액을 확인하세요.');if(!confirm(`${money(direct.amount)}를 에스크로에 보관하고 거래요청을 보낼까요?`))return;try{const r=await api.directEscrow({seller_id:direct.seller_id,amount:Number(direct.amount),title:direct.title||'직접 협의 거래',description:direct.description||null,category_id:direct.category_id?Number(direct.category_id):null});setDirectOpen(false);await load(activeCategory);alert(`직접 에스크로 거래 #${r.trade_id}가 생성되었습니다.`);setView('trades')}catch(e){alert(e.message)}}
@@ -33,7 +33,7 @@ export default function MarketPage(){
  return <main className="marketPage">
   <section className="marketHero"><div><span className="eyebrow">ANGEL PAY · N PAY MARKET</span><h1>자유시장</h1><p>엔페이 에스크로를 통해 판매상품을 비교하고 안전하게 거래하세요.</p></div><div className="marketHeroActions"><a className="softButton" href="/seller">판매자센터</a><button className="softButton" onClick={()=>setView('trades')}>내 거래</button></div></section>
   <div className="marketViewTabs"><button className={view==='products'?'active':''} onClick={()=>setView('products')}>전체 상품</button><button className={view==='vip'?'active':''} onClick={()=>setView('vip')}>VIP 판매자</button><button className={view==='trades'?'active':''} onClick={()=>setView('trades')}>내 거래</button></div>
-  <section className="marketBannerArea">{bannerSlots.map((b,i)=><div className="marketBannerSlot" key={i}>{b?(b.target_url?<a href={b.target_url} target="_blank" rel="noreferrer"><img src={b.image_url} alt={b.title||`광고 ${i+1}`}/></a>:<div className="marketBannerItem"><img src={b.image_url} alt={b.title||`광고 ${i+1}`}/></div>):<div className="marketBannerEmpty"><b>AD SLOT {i+1}</b><span>엔페이 광고 영역</span></div>}</div>)}</section>
+  <PaidBannerGrid/>
   {(view==='products'||view==='vip')&&<><section className="shopToolbar"><div className="marketSearch"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="상품명 또는 판매자 검색"/></div><select value={sort} onChange={e=>setSort(e.target.value)}><option value="latest">최신순</option><option value="low">가격 낮은순</option><option value="high">가격 높은순</option><option value="sales">판매 많은순</option></select></section><div className="categoryRail"><button className={!activeCategory?'active':''} onClick={()=>chooseCategory('')}>전체보기</button>{categories.map(c=><button className={String(activeCategory)===String(c.id)?'active':''} key={c.id} onClick={()=>chooseCategory(c.id)}>{c.name}</button>)}</div></>}
   {view==='products'&&<section className="productGrid">{shownProducts.length?shownProducts.map(p=><ProductCard p={p} key={p.id}/>):<div className="marketEmpty">조건에 맞는 상품이 없습니다.</div>}</section>}
   {view==='vip'&&<section><div className="vipBoardIntro"><div><span className="vipTag">VIP SELLER</span><h2>VIP 판매자 상품</h2><p>VIP 등록 기간이 유효한 판매자의 상품만 모아봅니다. VIP 상품은 전체 상품에도 함께 노출됩니다.</p></div><a href="/seller">VIP 판매자 등록</a></div><div className="productGrid">{vipProducts.length?vipProducts.map(p=><ProductCard p={p} key={p.id}/>):<div className="marketEmpty">현재 등록된 VIP 판매자 상품이 없습니다.</div>}</div></section>}
