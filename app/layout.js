@@ -1,5 +1,6 @@
 import './globals.css';
 import './marketplace.css';
+import './ui-hotfix.css';
 import TopNav from './topnav';
 
 export const metadata={title:'HUB24 MESSAGE',description:'Telegram messaging operations dashboard'};
