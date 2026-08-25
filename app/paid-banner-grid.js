@@ -10,9 +10,9 @@ export default function PaidBannerGrid(){
  const [data,setData]=useState({items:[],plans:[],slot_count:3,image_guide:'권장 1200×360px (10:3), JPG/PNG/WebP, 최대 5MB'});
  const [selected,setSelected]=useState(null),[mode,setMode]=useState('purchase'),[plan,setPlan]=useState('1M');
  const [file,setFile]=useState(null),[preview,setPreview]=useState(''),[targetUrl,setTargetUrl]=useState(''),[title,setTitle]=useState(''),[busy,setBusy]=useState(false);
- async function load(){try{const r=await api.bannerSlots();setData(r);return r}catch{return null}}
+ async function load(){try{const r=await api.bannerSlots();setData({...r,slot_count:Number(r?.slot_count||3)});return {...r,slot_count:Number(r?.slot_count||3)}}catch{return null}}
  useEffect(()=>{load()},[]);
- const count=Math.max(1,Math.min(6,Number(data.slot_count||data.items?.length||3)));
+ const count=Math.max(1,Math.min(6,Number(data.slot_count||3)));
  const slots=Array.from({length:count},(_,i)=>data.items?.find(x=>Number(x.slot)===i+1)||{slot:i+1,available:true});
  function openPurchase(s){if(!s.available&&!s.owned_by_me)return;setSelected(s);setMode(s.owned_by_me?'edit':'purchase');setTargetUrl(s.target_url||'');setTitle(s.title||`광고 ${s.slot}`);setFile(null);setPreview(s.image_url||'')}
  function friendly(e){const m=e?.message||String(e);if(m.includes('INSUFFICIENT_POINT'))return '포인트가 부족합니다.';if(m.includes('SLOT_UNAVAILABLE'))return '이미 다른 사용자가 이용 중인 광고칸입니다.';if(m.includes('BANNER_LIMIT_2'))return '계정 1개당 동시에 최대 2개 광고칸만 이용할 수 있습니다.';if(m.includes('SLOT_NOT_OPEN'))return '현재 운영자가 열어둔 광고 슬롯이 아닙니다.';return m}
