@@ -41,6 +41,7 @@ export default function TopNav(){
     {nav('/jobs','구인구직',p?.startsWith('/jobs'))}
     {nav('/blacklist','블랙리스트',p?.startsWith('/blacklist'))}
     {nav('/wallet','자금',p?.startsWith('/wallet'))}
+    {nav('/referral','추천인',p?.startsWith('/referral'))}
     {nav('/','텔발',p==='/')}
     {nav('/?guide=1','사용방법',false)}
    </nav>
@@ -49,7 +50,7 @@ export default function TopNav(){
       <button style={s.point} onClick={()=>setOpen(open==='wallet'?'':'wallet')}><span style={{fontSize:9,color:'#b7d8ff',fontWeight:900}}>N POINT</span><b style={{fontSize:12}}>{fmt(wallet?.available_balance)}</b><span>⌄</span></button>
       {open==='wallet'&&<div style={s.drop}><div style={{padding:'6px 8px 10px',fontSize:11,fontWeight:900}}>엔페이 포인트</div><div style={s.row}><span style={{color:'#8da7c5'}}>사용 가능</span><b>{fmt(wallet?.available_balance)}</b></div><div style={s.row}><span style={{color:'#8da7c5'}}>에스크로</span><b>{fmt(wallet?.escrow_balance)}</b></div><div style={s.row}><span style={{color:'#8da7c5'}}>판매 정산</span><b>{fmt(wallet?.settlement_balance)}</b></div><div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginTop:8}}><a href="/wallet?tab=charge" style={{...s.link,textAlign:'center',background:'#17304f'}}>충전</a><a href="/wallet?tab=withdraw" style={{...s.link,textAlign:'center',background:'#17304f'}}>출금</a><a href="/wallet?tab=history" style={{...s.link,textAlign:'center',background:'#17304f'}}>내역</a></div></div>}
     </div>}
-    {session?<div style={s.wrap}><button style={s.profile} onClick={()=>setOpen(open==='profile'?'':'profile')}><span style={s.avatar}>{initial}</span><span>⌄</span></button>{open==='profile'&&<div style={{...s.drop,minWidth:220}}><div style={{padding:'8px 9px 10px',fontSize:10,color:'#8ca3bd',borderBottom:'1px solid #294867',overflow:'hidden',textOverflow:'ellipsis'}}>{email}</div><a href="/market?view=trades" style={s.link}>내 거래</a><a href="/seller" style={s.link}>판매자센터</a><a href="/referral" style={s.link}>추천인 · 추천왕</a><a href="/wallet" style={s.link}>자금 관리</a><button onClick={()=>supabase.auth.signOut()} style={{width:'100%',border:0,background:'transparent',color:'#ff8f9d',textAlign:'left',padding:'10px 9px',fontSize:11,cursor:'pointer'}}>로그아웃</button></div>}</div>:<a href="/" style={{...s.link,border:'1px solid #4d77aa',background:'#ffffff12',color:'#fff'}}>로그인</a>}
+    {session?<div style={s.wrap}><button style={s.profile} onClick={()=>setOpen(open==='profile'?'':'profile')}><span style={s.avatar}>{initial}</span><span>⌄</span></button>{open==='profile'&&<div style={{...s.drop,minWidth:220}}><div style={{padding:'8px 9px 10px',fontSize:10,color:'#8ca3bd',borderBottom:'1px solid #294867',overflow:'hidden',textOverflow:'ellipsis'}}>{email}</div><a href="/market?view=trades" style={s.link}>내 거래</a><a href="/seller" style={s.link}>판매자센터</a><a href="/wallet" style={s.link}>자금 관리</a><button onClick={()=>supabase.auth.signOut()} style={{width:'100%',border:0,background:'transparent',color:'#ff8f9d',textAlign:'left',padding:'10px 9px',fontSize:11,cursor:'pointer'}}>로그아웃</button></div>}</div>:<a href="/" style={{...s.link,border:'1px solid #4d77aa',background:'#ffffff12',color:'#fff'}}>로그인</a>}
    </div>
  </div></header>;
 }
