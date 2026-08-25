@@ -6,6 +6,7 @@ import './angel-theme.css';
 import './brand-overrides.css';
 import './community.css';
 import './paid-banners.css';
+import './banner-board-tweaks.css';
 import TopNav from './topnav';
 
 export const metadata={title:'ANGEL PAY · N PAY',description:'ANGEL PAY marketplace, escrow, community and messaging platform'};
