@@ -7,6 +7,7 @@ import './brand-overrides.css';
 import './community.css';
 import './paid-banners.css';
 import './banner-board-tweaks.css';
+import './market-chat.css';
 import TopNav from './topnav';
 import SignupRedirect from './signup-redirect';
 import SendAssignmentControls from './send-assignment-controls';
