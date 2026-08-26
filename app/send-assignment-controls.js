@@ -27,7 +27,7 @@ function checkboxByText(text){
 
 export default function SendAssignmentControls(){
   const pathname=usePathname();
-  const [host,setHost]=useState(null),[card,setCard]=useState(null);
+  const [host,setHost]=useState(null);
   const [accounts,setAccounts]=useState([]),[selected,setSelected]=useState([]);
   const [perAccount,setPerAccount]=useState(50),[prefsLoaded,setPrefsLoaded]=useState(false);
   const [importStatus,setImportStatus]=useState(null),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
@@ -42,7 +42,7 @@ export default function SendAssignmentControls(){
       if(!c){setTimeout(place,350);return}
       let node=c.querySelector('[data-send-assignment-host]');
       if(!node){node=document.createElement('div');node.dataset.sendAssignmentHost='1';const form=c.querySelector('.form');if(form)form.insertAdjacentElement('afterend',node);else c.appendChild(node)}
-      setCard(c);setHost(node);
+      setHost(node);
       [...c.querySelectorAll('button')].filter(b=>b.textContent?.trim()==='발송 시작').forEach(b=>{b.style.display='none'});
     };
     place();const id=setInterval(place,1000);
@@ -70,13 +70,13 @@ export default function SendAssignmentControls(){
   },[pathname,prefsLoaded]);
 
   useEffect(()=>{
-    if(!host||!pathname||pathname!=='/')return;
+    if(!host||pathname!=='/')return;
     let id;
     const poll=async()=>{
       const bid=Number(value('발송 DB')||0);if(!bid)return;
       try{const s=await telegramSendApi.contactImportStatus(bid);setImportStatus(s)}catch{}
     };
-    poll();id=setInterval(poll,2000);return()=>clearInterval(id);
+    poll();id=setInterval(poll,1500);return()=>clearInterval(id);
   },[host,pathname]);
 
   const capacity=useMemo(()=>selected.length*perAccount,[selected,perAccount]);
@@ -104,7 +104,7 @@ export default function SendAssignmentControls(){
     setBusy(true);setMsg('연락처 추가 작업 시작 중...');
     try{
       await telegramSendApi.startContactImport(bid,{account_ids:selected,max_contacts_per_account:clamp(perAccount)});
-      const s=await telegramSendApi.contactImportStatus(bid);setImportStatus(s);setMsg('연락처 추가를 시작했습니다. 10개씩 묶어서 처리합니다.');
+      const s=await telegramSendApi.contactImportStatus(bid);setImportStatus(s);setMsg('연락처 추가를 시작했습니다. 계정별 진행률은 아래에서 확인할 수 있습니다.');
     }catch(e){alert(e.message);setMsg(e.message)}finally{setBusy(false)}
   }
   async function startSend(){
@@ -124,6 +124,7 @@ export default function SendAssignmentControls(){
 
   if(pathname!=='/'||!host)return null;
   const s=importStatus||{};const total=Number(s.total_count||0),processed=Number(s.processed||0),resolved=Number(s.resolved||0),failed=Number(s.failed||0);
+  const accountProgress=Object.values(s.account_progress||{});
   return createPortal(
     <div style={{marginTop:14,border:'1px solid #294a6d',borderRadius:12,padding:14,background:'#0b1b2f'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
@@ -154,6 +155,13 @@ export default function SendAssignmentControls(){
         {s.error&&<div style={{color:'#ff9b9b',marginTop:5}}>{s.error}</div>}
         {msg&&<div style={{color:'#8fc5ff',marginTop:5}}>{msg}</div>}
       </div>
+      {accountProgress.length>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:8,marginTop:9}}>
+        {accountProgress.map(p=>{const pct=p.total?Math.round((Number(p.processed||0)/Number(p.total))*100):100;return <div key={p.account_id} style={{border:'1px solid #263f59',borderRadius:9,padding:9,background:'#0d1d2f'}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:11}}><b>{p.label||`계정 #${p.account_id}`}</b><span>{p.status}</span></div>
+          <div style={{height:6,borderRadius:4,background:'#142a40',overflow:'hidden',margin:'7px 0'}}><div style={{height:'100%',width:`${Math.max(0,Math.min(100,pct))}%`,background:'currentColor',color:'#4da3ff'}}/></div>
+          <div style={{fontSize:10,color:'#8fa7bf'}}>진행 {Number(p.processed||0).toLocaleString()} / {Number(p.total||0).toLocaleString()} · 확인 {Number(p.resolved||0).toLocaleString()} · 실패 {Number(p.failed||0).toLocaleString()}</div>
+        </div>})}
+      </div>}
     </div>,host
   );
 }
