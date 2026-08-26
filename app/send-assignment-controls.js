@@ -6,7 +6,7 @@ import {usePathname} from 'next/navigation';
 import {api} from '../lib/api';
 import {telegramSendApi} from '../lib/telegram-send-api';
 
-const clamp=n=>Math.max(1,Math.min(60,Number(n||1)));
+const clamp=n=>Math.max(1,Math.min(1000,Number(n||1)));
 
 function fieldNode(label){
   const fields=[...document.querySelectorAll('label.field')];
@@ -139,7 +139,7 @@ export default function SendAssignmentControls(){
           </div>
         </div>
         <div>
-          <label className="field"><span>계정당 최대 연락처 추가</span><input className="input" type="number" min="1" max="60" value={perAccount} onChange={e=>setPerAccount(clamp(e.target.value))}/></label>
+          <label className="field"><span>계정당 최대 연락처 추가</span><input className="input" type="number" min="1" max="1000" value={perAccount} onChange={e=>setPerAccount(clamp(e.target.value))}/></label>
           <button type="button" className="btn" style={{width:'100%',marginTop:7}} onClick={saveMax} disabled={busy}>최대 처리개수 저장</button>
           <div style={{marginTop:8,padding:10,borderRadius:9,background:'#0e2239',fontSize:11,lineHeight:1.65,color:'#9fb4ca'}}>선택 계정 <b style={{color:'#fff'}}>{selected.length}개</b><br/>현재 최대 처리 <b style={{color:'#61adff'}}>{capacity.toLocaleString()}건</b><br/><span style={{color:'#6f8aa6'}}>연락처 추가 API는 10개씩 묶음 처리</span></div>
         </div>
