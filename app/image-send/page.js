@@ -1,14 +1,88 @@
 'use client';
-import {useEffect,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {supabase} from '../../lib/supabase';
 import {api,BASE} from '../../lib/api';
+import {telegramSendApi} from '../../lib/telegram-send-api';
+
+const clamp=n=>Math.max(1,Math.min(1000,Number(n||1)));
+
+async function request(path,options={}){
+ const {data:{session}}=await supabase.auth.getSession();
+ if(!session?.access_token)throw new Error('로그인이 필요합니다.');
+ const r=await fetch(BASE+path,{...options,headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`,...(options.headers||{})}});
+ let body={};try{body=await r.json()}catch{}
+ if(!r.ok)throw new Error(body.detail||`HTTP ${r.status}`);
+ return body;
+}
 
 export default function ImageSendPage(){
- const [ready,setReady]=useState(false),[session,setSession]=useState(null),[accounts,setAccounts]=useState([]),[accountId,setAccountId]=useState(''),[postCode,setPostCode]=useState(''),[phone1,setPhone1]=useState(''),[phone2,setPhone2]=useState(''),[phone3,setPhone3]=useState(''),[busy,setBusy]=useState(false),[result,setResult]=useState(null);
- useEffect(()=>{supabase.auth.getSession().then(async({data})=>{const s=data.session||null;setSession(s);setReady(true);if(s){try{const r=await api.accounts();const list=(r.items||r.accounts||[]).filter(x=>['READY','CONNECTED'].includes(String(x.status||'').toUpperCase()));setAccounts(list);if(list[0])setAccountId(String(list[0].id))}catch(e){alert(e.message)}}})},[]);
- async function send(){if(!accountId)return alert('이미지 발송에 사용할 Telegram 계정을 선택하세요.');if(!postCode.trim())return alert('PostBot 이미지 게시물 코드를 입력하세요.');const phones=[phone1.trim(),phone2.trim(),phone3.trim()];if(phones.some(x=>!x))return alert('발송 전화번호 3개를 모두 입력하세요.');const norm=x=>x.replace(/\D/g,'').replace(/^82/,'0');if(new Set(phones.map(norm)).size!==3)return alert('전화번호 3개는 서로 달라야 합니다.');setBusy(true);setResult(null);try{const {data:{session:s}}=await supabase.auth.getSession();const r=await fetch(BASE+'/v1/telegram/image-send',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${s.access_token}`},body:JSON.stringify({account_id:Number(accountId),post_code:postCode.trim(),phones})});let body={};try{body=await r.json()}catch{}if(!r.ok)throw new Error(body.detail||`HTTP ${r.status}`);setResult(body);alert(`이미지 발송 완료: 연락처확인 ${body.resolved_count||0} / 전송성공 ${body.success_count||0} / 실패 ${body.failed_count||0}`)}catch(e){alert(e.message)}finally{setBusy(false)}}
+ const [ready,setReady]=useState(false),[session,setSession]=useState(null);
+ const [accounts,setAccounts]=useState([]),[batches,setBatches]=useState([]),[selected,setSelected]=useState([]);
+ const [batchId,setBatchId]=useState(''),[postCode,setPostCode]=useState(''),[perAccount,setPerAccount]=useState(50);
+ const [delayMin,setDelayMin]=useState(2),[delayMax,setDelayMax]=useState(5),[globalDedupe,setGlobalDedupe]=useState(true);
+ const [importStatus,setImportStatus]=useState(null),[busy,setBusy]=useState(false),[msg,setMsg]=useState(''),[jobId,setJobId]=useState(null);
+
+ useEffect(()=>{let alive=true;supabase.auth.getSession().then(async({data})=>{if(!alive)return;const s=data.session||null;setSession(s);setReady(true);if(!s)return;try{const [a,b,p]=await Promise.all([api.accounts(),api.batches(),telegramSendApi.preferences()]);if(!alive)return;const ac=(a.items||[]).filter(x=>String(x.status||'').toUpperCase()==='READY');setAccounts(ac);setSelected(ac.map(x=>Number(x.id)));setBatches(b.items||[]);if((b.items||[])[0])setBatchId(String(b.items[0].id));setPerAccount(clamp(p.max_contacts_per_account||50))}catch(e){setMsg(e.message)}});return()=>{alive=false}},[]);
+
+ useEffect(()=>{if(!batchId||!session)return;let alive=true;const poll=async()=>{try{const s=await telegramSendApi.contactImportStatus(Number(batchId));if(alive)setImportStatus(s)}catch{}};poll();const id=setInterval(poll,1500);return()=>{alive=false;clearInterval(id)}},[batchId,session]);
+
+ const capacity=useMemo(()=>selected.length*perAccount,[selected,perAccount]);
+ const toggle=id=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
  const go=p=>{window.location.href=p};
+
+ async function saveMax(){setBusy(true);setMsg('');try{const prev=await telegramSendApi.preferences();await telegramSendApi.savePreferences({message_text:prev.message_text||'',button_text:prev.button_text||'',button_url:prev.button_url||'',max_contacts_per_account:clamp(perAccount)});setMsg(`계정당 최대 연락처 추가 ${clamp(perAccount)}건 저장 완료`)}catch(e){setMsg(e.message)}finally{setBusy(false)}}
+
+ async function addContacts(){
+  if(!batchId)return alert('발송 DB를 선택하세요.');
+  if(!selected.length)return alert('READY 계정을 1개 이상 선택하세요.');
+  setBusy(true);setMsg('연락처 추가 작업 시작 중...');
+  try{await telegramSendApi.startContactImport(Number(batchId),{account_ids:selected,max_contacts_per_account:clamp(perAccount)});const s=await telegramSendApi.contactImportStatus(Number(batchId));setImportStatus(s);setMsg('연락처 추가를 시작했습니다. 계정별 진행률을 확인하세요.')}catch(e){alert(e.message);setMsg(e.message)}finally{setBusy(false)}
+ }
+
+ async function startSend(){
+  if(!batchId)return alert('발송 DB를 선택하세요.');
+  if(!postCode.trim())return alert('PostBot 이미지+버튼 게시물 코드를 입력하세요.');
+  if(!selected.length)return alert('READY 계정을 1개 이상 선택하세요.');
+  let s;try{s=await telegramSendApi.contactImportStatus(Number(batchId));setImportStatus(s)}catch(e){return alert(e.message)}
+  if(String(s.status||'')!=='COMPLETED')return alert('먼저 연락처 추가 작업을 완료하세요.');
+  setBusy(true);setMsg('이미지 발송 JOB 생성 중...');setJobId(null);
+  try{
+   const j=await request('/v1/image-jobs',{method:'POST',body:JSON.stringify({batch_id:Number(batchId),post_code:postCode.trim(),account_ids:selected,contacts_per_account:clamp(perAccount),delay_min:Number(delayMin||0),delay_max:Number(delayMax||0),global_dedupe:globalDedupe})});
+   await api.startJob(j.id);setJobId(j.id);setMsg(`이미지+버튼 발송 시작 / ${Number(j.assigned_count||j.total_count||0).toLocaleString()}건 · JOB #${j.id}`);
+  }catch(e){alert(e.message);setMsg(e.message)}finally{setBusy(false)}
+ }
+
  if(!ready)return <div className="shell"><aside className="sidebar"><div className="brand">ANGEL PAY</div></aside><main className="content"><section className="card">불러오는 중...</section></main></div>;
  if(!session)return <main className="content"><section className="card">로그인이 필요합니다.</section></main>;
- return <div className="shell"><aside className="sidebar"><div className="brand">ANGEL PAY</div><div className="sub">N PAY · 텔페이</div><div className="nav"><button onClick={()=>go('/')}>메시지 발송</button><button className="active">이미지 발송</button><button onClick={()=>go('/?tab=accounts')}>Telegram 계정</button><button onClick={()=>go('/?tab=database')}>DB 관리</button><button onClick={()=>go('/?tab=live')}>실시간 작업 로그</button><button onClick={()=>go('/?tab=history')}>작업 이력</button><button onClick={()=>go('/?tab=guide')}>사용방법</button></div></aside><main className="content"><header className="top"><div><h1>이미지 발송</h1><p>텍스트 발송과 분리된 PostBot 이미지·버튼 전송 전용 메뉴입니다.</p></div></header><section className="card"><div className="form"><label className="field"><span>담당 Telegram 계정</span><select className="input" value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">선택</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.label||a.phone||a.username||`계정 #${a.id}`}</option>)}</select></label><label className="field"><span>PostBot 이미지 게시물 코드</span><input className="input" value={postCode} onChange={e=>setPostCode(e.target.value)} placeholder="예: 40599y1mszb005s"/></label><label className="field"><span>발송 전화번호 1</span><input className="input" value={phone1} onChange={e=>setPhone1(e.target.value)} placeholder="010-0000-0000"/></label><label className="field"><span>발송 전화번호 2</span><input className="input" value={phone2} onChange={e=>setPhone2(e.target.value)} placeholder="010-0000-0000"/></label><label className="field"><span>발송 전화번호 3</span><input className="input" value={phone3} onChange={e=>setPhone3(e.target.value)} placeholder="010-0000-0000"/></label></div><div className="note" style={{marginTop:10}}>전화번호는 전송 시 +82 형식으로 변환되고, 담당계정 연락처에서 Telegram UID를 확인한 뒤 PostBot 이미지 게시물을 전송합니다. 기존 DB/JOB에는 자동 추가하지 않습니다.</div><div className="actions"><button className="btn primary" disabled={busy} onClick={send}>{busy?'연락처 확인 · 이미지 전송 중...':'이미지 3건 발송'}</button></div>{result&&<div style={{marginTop:16,padding:14,border:'1px solid #315575',borderRadius:10}}><b>발송 결과 · 연락처확인 {result.resolved_count||0} / 전송성공 {result.success_count||0} / 실패 {result.failed_count||0}</b><div style={{marginTop:10,display:'grid',gap:8}}>{(result.items||[]).map((x,i)=><div key={i} style={{padding:10,border:'1px solid #244662',borderRadius:8}}><b>{x.phone}</b><div style={{fontSize:12,marginTop:4}}>UID: {x.telegram_user_id||'-'} · {x.contact_resolved?'연락처 확인':'미확인'} · {x.ok?`전송 성공 · message_id ${x.message_id||'-'}`:`전송 실패 · ${x.error||'알 수 없는 오류'}`}</div></div>)}</div></div>}</section></main></div>;
+ const s=importStatus||{};const total=Number(s.total_count||0),processed=Number(s.processed||0),resolved=Number(s.resolved||0),failed=Number(s.failed||0);const accountProgress=Object.values(s.account_progress||{});
+
+ return <div className="shell"><aside className="sidebar"><div className="brand">ANGEL PAY</div><div className="sub">N PAY · 엔페이</div><div className="nav"><button onClick={()=>go('/')}>메시지 발송</button><button className="active">이미지 발송</button><button onClick={()=>go('/?tab=accounts')}>Telegram 계정</button><button onClick={()=>go('/?tab=database')}>DB 관리</button><button onClick={()=>go('/?tab=live')}>실시간 작업 로그</button><button onClick={()=>go('/?tab=history')}>작업 이력</button><button onClick={()=>go('/?tab=guide')}>사용방법</button></div></aside><main className="content">
+  <header className="top"><div><h1>이미지 발송</h1><p>이미지 + 본문 + 인라인 버튼이 포함된 PostBot 게시물을 배정 DB에 정식 발송합니다.</p></div></header>
+  <div className="stats"><div className="stat"><small>READY 계정</small><strong>{accounts.length}</strong></div><div className="stat"><small>선택 계정</small><strong>{selected.length}</strong></div><div className="stat"><small>현재 최대 배정</small><strong>{capacity.toLocaleString()}</strong></div><div className="stat"><small>연락처 확인</small><strong>{resolved.toLocaleString()}</strong></div></div>
+
+  <section className="card">
+   <div className="head"><div><h2>이미지 + 버튼 발송 작업</h2><p>① DB/계정 배정 → ② 연락처 추가 → ③ 이미지 발송 시작</p></div><div className="actions compact"><button className="btn" onClick={()=>go('/?tab=database')}>DB 관리</button><button className="btn" onClick={()=>go('/?tab=accounts')}>계정 관리 / 추가</button></div></div>
+   <div className="form">
+    <label className="field"><span>발송 DB</span><select className="input" value={batchId} onChange={e=>{setBatchId(e.target.value);setImportStatus(null);setJobId(null)}}><option value="">DB 선택</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name} · {Number(b.total_count||0).toLocaleString()}건</option>)}</select></label>
+    <label className="field"><span>PostBot 이미지+버튼 게시물 코드</span><input className="input" value={postCode} onChange={e=>setPostCode(e.target.value)} placeholder="예: 40599y1mszb005s"/></label>
+    <label className="field"><span>최소 간격</span><input className="input" type="number" min="0" step="0.5" value={delayMin} onChange={e=>setDelayMin(e.target.value)}/></label>
+    <label className="field"><span>최대 간격</span><input className="input" type="number" min="0" step="0.5" value={delayMax} onChange={e=>setDelayMax(e.target.value)}/></label>
+   </div>
+   <label className="check"><input type="checkbox" checked={globalDedupe} onChange={e=>setGlobalDedupe(e.target.checked)}/> 전화번호/Telegram UID 전체 성공이력 중복 방지</label>
+
+   <div style={{marginTop:16,border:'1px solid #294a6d',borderRadius:12,padding:14,background:'#0b1b2f'}}>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 220px',gap:12,alignItems:'start'}}>
+     <div><div style={{fontSize:12,color:'#9bb0c6',marginBottom:7}}>연락처를 추가하고 발송할 READY 계정</div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:7}}>{accounts.length?accounts.map(a=>{const id=Number(a.id),on=selected.includes(id);return <label key={a.id} style={{display:'flex',alignItems:'center',gap:8,border:`1px solid ${on?'#3187dc':'#273d57'}`,borderRadius:9,padding:'9px 10px',cursor:'pointer',background:on?'#102b49':'#0d1827'}}><input type="checkbox" checked={on} onChange={()=>toggle(id)}/><span><b style={{display:'block',fontSize:12}}>{a.label||a.phone_masked||`계정 #${a.id}`}</b><small style={{color:'#7fa2c4'}}>READY</small></span></label>}):<div style={{fontSize:12,color:'#d29a62'}}>READY 계정이 없습니다.</div>}</div></div>
+     <div><label className="field"><span>계정당 최대 연락처 추가</span><input className="input" type="number" min="1" max="1000" value={perAccount} onChange={e=>setPerAccount(clamp(e.target.value))}/></label><button type="button" className="btn" style={{width:'100%',marginTop:7}} onClick={saveMax} disabled={busy}>최대 처리개수 저장</button><div style={{marginTop:8,padding:10,borderRadius:9,background:'#0e2239',fontSize:11,lineHeight:1.65,color:'#9fb4ca'}}>선택 계정 <b style={{color:'#fff'}}>{selected.length}개</b><br/>현재 최대 처리 <b style={{color:'#61adff'}}>{capacity.toLocaleString()}건</b><br/><span style={{color:'#6f8aa6'}}>연락처 추가 API는 계정별 10개씩 묶음 처리</span></div></div>
+    </div>
+
+    <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:12}}><button type="button" className="btn" onClick={addContacts} disabled={busy}>① 연락처 추가</button><button type="button" className="btn primary" onClick={startSend} disabled={busy||String(s.status||'')!=='COMPLETED'}>② 이미지 발송 시작</button>{jobId&&<button type="button" className="btn" onClick={()=>go('/?tab=live')}>JOB #{jobId} 작업 로그</button>}</div>
+
+    <div style={{marginTop:10,padding:10,borderRadius:9,background:'#0c1929',fontSize:11,color:'#9fb4ca'}}>연락처 추가 상태: <b style={{color:s.status==='COMPLETED'?'#62d69f':s.status==='RUNNING'?'#61adff':'#fff'}}>{s.status||'NOT_STARTED'}</b>{total>0&&<> · 진행 <b>{processed.toLocaleString()} / {total.toLocaleString()}</b> · 확인 <b style={{color:'#62d69f'}}>{resolved.toLocaleString()}</b> · 미확인/실패 <b style={{color:'#e6a66b'}}>{failed.toLocaleString()}</b></>}{s.error&&<div style={{color:'#ff9b9b',marginTop:5}}>{s.error}</div>}{msg&&<div style={{color:'#8fc5ff',marginTop:5}}>{msg}</div>}</div>
+
+    {accountProgress.length>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:8,marginTop:9}}>{accountProgress.map(p=>{const pct=p.total?Math.round((Number(p.processed||0)/Number(p.total))*100):100;return <div key={p.account_id} style={{border:'1px solid #263f59',borderRadius:9,padding:9,background:'#0d1d2f'}}><div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:11}}><b>{p.label||`계정 #${p.account_id}`}</b><span>{p.status}</span></div><div style={{height:6,borderRadius:4,background:'#142a40',overflow:'hidden',margin:'7px 0'}}><div style={{height:'100%',width:`${Math.max(0,Math.min(100,pct))}%`,background:'currentColor',color:'#4da3ff'}}/></div><div style={{fontSize:10,color:'#8fa7bf'}}>진행 {Number(p.processed||0).toLocaleString()} / {Number(p.total||0).toLocaleString()} · 확인 {Number(p.resolved||0).toLocaleString()} · 실패 {Number(p.failed||0).toLocaleString()}</div></div>})}</div>}
+   </div>
+   <div className="note" style={{marginTop:12}}>이 화면은 테스트가 아니라 정식 이미지 발송 JOB입니다. 성공 처리된 대상만 기존 정책대로 15P가 차감되고, 작업 상태와 이력은 기존 발송 JOB 체계에 기록됩니다.</div>
+  </section>
+ </main></div>;
 }
