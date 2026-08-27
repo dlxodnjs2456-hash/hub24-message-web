@@ -15,7 +15,7 @@ export default function ChatMediaEnhancer(){
     if(!item)return;
     const id=String(item.id||'');
     if(node.dataset.npayMediaMessageId!==id){
-     node.querySelectorAll('[data-npay-chat-media]').forEach(x=>x.remove());
+     node.querySelectorAll('[data-npay-chat-media],[data-npay-chat-buttons]').forEach(x=>x.remove());
      node.dataset.npayMediaMessageId=id;
     }
     if(item.media_data_url&&!node.querySelector('[data-npay-chat-media]')){
@@ -32,6 +32,30 @@ export default function ChatMediaEnhancer(){
      img.style.background='#081421';
      const p=node.querySelector('p');
      if(p)node.insertBefore(img,p);else node.appendChild(img);
+    }
+    if(Array.isArray(item.buttons)&&item.buttons.length&&!node.querySelector('[data-npay-chat-buttons]')){
+     const wrap=document.createElement('div');
+     wrap.setAttribute('data-npay-chat-buttons','1');
+     wrap.style.display='grid';
+     wrap.style.gap='6px';
+     wrap.style.marginTop='8px';
+     item.buttons.forEach(btn=>{
+      const el=btn.url?document.createElement('a'):document.createElement('div');
+      el.textContent=btn.text||'버튼';
+      if(btn.url){el.href=btn.url;el.target='_blank';el.rel='noopener noreferrer'}
+      el.style.display='block';
+      el.style.padding='9px 12px';
+      el.style.border='1px solid #2f77b8';
+      el.style.borderRadius='8px';
+      el.style.background='#11365a';
+      el.style.color='#e9f5ff';
+      el.style.textAlign='center';
+      el.style.fontWeight='700';
+      el.style.textDecoration='none';
+      el.style.fontSize='13px';
+      wrap.appendChild(el);
+     });
+     node.appendChild(wrap);
     }
     const p=node.querySelector('p');
     if(p&&item.has_photo&&!item.text){p.style.display='none'}
