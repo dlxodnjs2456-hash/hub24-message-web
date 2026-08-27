@@ -11,9 +11,10 @@ import './market-chat.css';
 import TopNav from './topnav';
 import SignupRedirect from './signup-redirect';
 import SendAssignmentControls from './send-assignment-controls';
+import SidebarImageSendLink from './sidebar-image-send-link';
 
 export const metadata={title:'ANGEL PAY · N PAY',description:'ANGEL PAY marketplace, escrow, community and messaging platform'};
 
 export default function RootLayout({children}){
-  return <html lang="ko"><body><SignupRedirect/><TopNav/><SendAssignmentControls/>{children}</body></html>;
+  return <html lang="ko"><body><SignupRedirect/><TopNav/><SendAssignmentControls/><SidebarImageSendLink/>{children}</body></html>;
 }
