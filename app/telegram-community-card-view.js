@@ -27,6 +27,22 @@ export default function TelegramCommunityCardView(){
 
   useEffect(()=>{
     if(pathname!=='/telegram-community')return;
+    document.body.classList.add('tc-card-mode');
+    const mark=()=>{
+      const sections=[...document.querySelectorAll('main section')];
+      const list=sections.find(s=>{
+        const t=(s.textContent||'');
+        return t.includes('순위')&&t.includes('커뮤니티')&&t.includes('좋아요')&&t.includes('댓글')&&!t.includes('내 홍보글 관리');
+      });
+      if(list)list.dataset.tcOriginalList='1';
+    };
+    mark();
+    const mo=new MutationObserver(mark);mo.observe(document.body,{childList:true,subtree:true});
+    return()=>{document.body.classList.remove('tc-card-mode');mo.disconnect()};
+  },[pathname]);
+
+  useEffect(()=>{
+    if(pathname!=='/telegram-community')return;
     load();
     const timer=setInterval(load,15000);
     return()=>clearInterval(timer);
