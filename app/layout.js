@@ -16,9 +16,10 @@ import ChatMediaEnhancer from './chat-media-enhancer';
 import ImageSendFetchProxy from './image-send-fetch-proxy';
 import ImageSendInlineLabels from './image-send-inline-labels';
 import BeginnerFlowGuide from './beginner-flow-guide';
+import TopnavTelegramCommunity from './topnav-telegram-community';
 
 export const metadata={title:'ANGEL PAY · N PAY',description:'ANGEL PAY marketplace, escrow, community and messaging platform'};
 
 export default function RootLayout({children}){
-  return <html lang="ko"><body><SignupRedirect/><TopNav/><SendAssignmentControls/><SidebarImageSendLink/><ChatMediaEnhancer/><ImageSendFetchProxy/><ImageSendInlineLabels/><BeginnerFlowGuide/>{children}</body></html>;
+  return <html lang="ko"><body><SignupRedirect/><TopNav/><TopnavTelegramCommunity/><SendAssignmentControls/><SidebarImageSendLink/><ChatMediaEnhancer/><ImageSendFetchProxy/><ImageSendInlineLabels/><BeginnerFlowGuide/>{children}</body></html>;
 }
