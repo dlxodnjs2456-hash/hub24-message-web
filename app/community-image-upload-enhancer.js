@@ -1,7 +1,7 @@
 'use client';
 import {useEffect} from 'react';
-import {supabase} from './lib/supabase';
-import {BASE} from './lib/api';
+import {supabase} from '../lib/supabase';
+import {BASE} from '../lib/api';
 
 function setReactInputValue(input,value){
   const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')?.set;
@@ -31,7 +31,7 @@ function enhance(label){
   const text=(span.textContent||'').trim();
   if(!text.includes('대표 이미지 URL'))return;
   label.dataset.communityUploadEnhanced='1';
-  span.textContent='대표 이미지 · 선택';
+  span.textContent='대표 이미지 · 파일 선택';
   input.style.display='none';
 
   const wrap=document.createElement('div');
